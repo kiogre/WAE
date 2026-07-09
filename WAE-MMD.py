@@ -117,6 +117,28 @@ def compute_fid(model, loader, num_samples=768, device='cuda'):
 
     return fid.compute().item()
 
+@torch.no_grad()
+def compute_sharpness(model, num_samples=1000):
+    model.eval()
+
+    # Laplacian Kernel
+    laplacian = torch.tensor(
+        [[0, 1, 0],
+         [1, -4, 1],
+         [0, 1, 0]],
+        dtype=torch.float32,
+        device=next(model.parameters()).device
+    ).view(1, 1, 3, 3)
+
+    samples = model.sample(num_samples)
+
+    # From RGB to gray scale
+    gray = samples.mean(dim=1, keepdim=True)
+
+    edges = F.conv2d(gray, laplacian, padding=1)
+
+    return edges.var().item()
+
 
 def train():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -192,6 +214,9 @@ if __name__ == "__main__":
 
     fid_score = compute_fid(model, test_loader, num_samples=1000)
     print(f"FID on test set: {fid_score:.2f}")
+
+    sharpness = compute_sharpness(model, num_samples=1000)
+    print(f"Sharpness: {sharpness:.4f}")
 
     show_generated(model)
     show_reconstructed(model)
